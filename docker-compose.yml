@@ -1,0 +1,32 @@
+version: '3.8'
+
+services:
+  pirod_greenplum:
+    image: woblerr/greenplum:6.27.1
+    container_name: pirod_greenplum
+    environment:
+      GREENPLUM_PASSWORD: gparray
+      GREENPLUM_PXF_ENABLE: "true"
+      GREENPLUM_DATABASE_NAME: lab3
+    # volumes:
+    #   - ./custom_init_scripts:/docker-entrypoint-initdb.d
+    ports:
+      - "5433:5432"
+    networks:
+      - gp_net
+
+  pirod_minio:
+    image: minio/minio:latest
+    container_name: pirod_minio
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      MINIO_ROOT_USER: admin
+      MINIO_ROOT_PASSWORD: password123
+    command: server /data --console-address ":9001" --address ":9000"
+    networks:
+      - gp_net
+
+networks:
+  gp_net:
