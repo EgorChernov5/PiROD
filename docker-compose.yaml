@@ -4,7 +4,7 @@
 # With persistent volumes.
 # Minio
 
-version: '3'
+# version: '3'
 services:
   pirod_gp_master:
     image: ${IMAGE_NAME}:${TAG}
@@ -14,26 +14,29 @@ services:
       - "${EXPOSE_MASTER_PORT}:5432"
     environment:
       - GREENPLUM_DEPLOYMENT=master
-      - GREENPLUM_GPPERFMON_ENABLE=true
-      - GREENPLUM_DISKQUOTA_ENABLE=true
+      # - GREENPLUM_GPPERFMON_ENABLE=true
+      # - GREENPLUM_DISKQUOTA_ENABLE=true
       - GREENPLUM_PXF_ENABLE=true
-      - GREENPLUM_PASSWORD_FILE=/run/secrets/gpdb_password
-      - GREENPLUM_GPMON_PASSWORD_FILE=/run/secrets/gpmon_password
-    secrets:
-      - gpdb_password
-      - gpmon_password
+      # - GREENPLUM_PASSWORD_FILE=/run/secrets/gpdb_password
+      # - GREENPLUM_GPMON_PASSWORD_FILE=/run/secrets/gpmon_password
+      - GREENPLUM_PASSWORD=${GREENPLUM_PASSWORD}
+      # - GREENPLUM_GPMON_PASSWORD=${GREENPLUM_GPMON_PASSWORD}
+      - GREENPLUM_DATABASE_NAME=${GREENPLUM_DATABASE_NAME}
+    # secrets:
+    #   - gpdb_password
+      # - gpmon_password
     volumes:
       - gpdb-master-data:/data
       - ./conf/gpinitsystem_config:/tmp/gpinitsystem_config
-      - ../docs/custom_init_scripts:/docker-entrypoint-initdb.d
+      # - ./docs/custom_init_scripts:/docker-entrypoint-initdb.d
       - ./conf/hostfile_gpinitsystem:/tmp/hostfile_gpinitsystem
-      - ./conf/ssh/id_rsa:/home/gpadmin/.ssh/id_rsa
-      - ./conf/ssh/id_rsa.pub:/home/gpadmin/.ssh/id_rsa.pub
+      - ./conf/ssh/id_rsa:/home/${GREENPLUM_USER}/.ssh/id_rsa
+      - ./conf/ssh/id_rsa.pub:/home/${GREENPLUM_USER}/.ssh/id_rsa.pub
     depends_on:
       - pirod_gp_segment1
       - pirod_gp_segment2
     networks:
-      - greenplum
+      - pirod_gp
 
   pirod_gp_segment1:
     image: ${IMAGE_NAME}:${TAG}
@@ -47,7 +50,7 @@ services:
       - ./conf/ssh/authorized_keys:/tmp/authorized_keys
     stop_grace_period: 60s
     networks:
-      - greenplum
+      - pirod_gp
 
   pirod_gp_segment2:
     image: ${IMAGE_NAME}:${TAG}
@@ -61,38 +64,24 @@ services:
       - ./conf/ssh/authorized_keys:/tmp/authorized_keys
     stop_grace_period: 60s
     networks:
-      - greenplum
+      - pirod_gp
       
   pirod_gp_minio:
     image: minio/minio:latest
     command: server /data --console-address ":9001"
     environment:
-      MINIO_ROOT_USER: minioadmin
-      MINIO_ROOT_PASSWORD: minioadmin
+      - MINIO_ROOT_USER=${MINIO_ROOT_USER}
+      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD}
     ports:
       - "9000:9000"
       - "9001:9001"
     volumes:
       - minio_data:/data
-
-  pirod_gp_minio_init:
-    image: minio/mc:latest
-    depends_on:
-      pirod_gp_minio:
-        condition: service_started
-    entrypoint:
-      - /bin/sh
-      - -c
-      - |
-        until mc alias set local http://minio:9000 minioadmin minioadmin; do
-          echo "Waiting for MinIO..."
-          sleep 1
-        done
-        mc mb -p local/inspector-dev || true
-    restart: "no"
+    networks:
+      - pirod_gp
 
 networks:
-  greenplum:
+  pirod_gp:
 
 volumes:
   gpdb-master-data:
@@ -100,8 +89,8 @@ volumes:
   gpdb-segment2-data:
   minio_data:
 
-secrets:
-  gpdb_password:
-    file: ./secrets/gpdb_password
-  gpmon_password:
-    file: ./secrets/gpmon_password
+# secrets:
+#   gpdb_password:
+#     file: ./run/secrets/gpdb_password
+  # gpmon_password:
+  #   file: ./run/secrets/gpmon_password
