@@ -1,32 +1,37 @@
-version: '3.8'
-
 services:
   pirod_greenplum:
-    image: woblerr/greenplum:6.27.1
+    image: ${IMAGE_NAME}:${TAG}
     container_name: pirod_greenplum
-    environment:
-      GREENPLUM_PASSWORD: gparray
-      GREENPLUM_PXF_ENABLE: "true"
-      GREENPLUM_DATABASE_NAME: lab3
-    # volumes:
-    #   - ./custom_init_scripts:/docker-entrypoint-initdb.d
+    hostname: pirod_greenplum
     ports:
-      - "5433:5432"
+      - "${EXPOSE_MASTER_PORT}:5432"
+    environment:
+      - GREENPLUM_PASSWORD=${GREENPLUM_PASSWORD}
+      - GREENPLUM_PXF_ENABLE=true
+      - GREENPLUM_DATABASE_NAME=${GREENPLUM_DATABASE_NAME}
+    volumes:
+      # - ./custom_init_scripts:/docker-entrypoint-initdb.d
+      - greenplum_data:/data
     networks:
-      - gp_net
+      - pirod_gp
 
   pirod_minio:
     image: minio/minio:latest
-    container_name: pirod_minio
+    command: server /data --console-address ":9001"
+    environment:
+      - MINIO_ROOT_USER=${MINIO_ROOT_USER}
+      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD}
     ports:
       - "9000:9000"
       - "9001:9001"
-    environment:
-      MINIO_ROOT_USER: admin
-      MINIO_ROOT_PASSWORD: password123
-    command: server /data --console-address ":9001" --address ":9000"
+    volumes:
+      - minio_data:/data
     networks:
-      - gp_net
+      - pirod_gp
 
 networks:
-  gp_net:
+  pirod_gp:
+
+volumes:
+  greenplum_data:
+  minio_data:
