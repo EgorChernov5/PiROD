@@ -209,3 +209,6 @@ __marimo__/
 # Data
 data/MoMA_Art_Collection/
 data/Hospital_Patient_Records/
+
+# Temporary
+TMP/
