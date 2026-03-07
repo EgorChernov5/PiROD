@@ -17,6 +17,8 @@ services:
 
   pirod_minio:
     image: minio/minio:latest
+    container_name: pirod_minio
+    hostname: pirod_minio
     command: server /data --console-address ":9001"
     environment:
       - MINIO_ROOT_USER=${MINIO_ROOT_USER}
