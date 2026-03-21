@@ -73,6 +73,63 @@ round-trip min/avg/max/stddev = 0.349/0.503/0.763/0.185 ms
 
 3. Заходим по `http://localhost:9001`, создаём корзину `hospitalpatientrecords` и загружаем CSV файлы: `encounters.csv`, `organizations.csv`, `patients.csv`, `payers.csv` и `procedures.csv`. ER-диаграммы выглядят следующим образом:
 
-![ER-диаграммы]()
+<img src="data/ER_diagrams.png" alt="ER-диаграмма" width="500">
 
-4. 
+4. Загрузка данных в GreenPlum с помощью PXF с ключами дистрибьюции ...
+
+Перед запуском настроим PXF:
+- Скопируем `/usr/local/pxf/templates/s3-site.xml` в `/data/pxf/conf/servers/minio/`.
+
+```bash
+mkdir -p /data/pxf/conf/servers/minio/
+cp /usr/local/pxf/templates/s3-site.xml /data/pxf/conf/servers/minio/
+```
+
+- Прописываем значения переменных:
+
+```
+fs.s3a.endpoint=http://pirod_minio:9000
+fs.s3a.access.key=minioadmin
+fs.s3a.secret.key=minioadmin
+# Включаем path-style для Minio
+fs.s3a.path.style.access=true
+# Отключаем SSL, если не настроен
+fs.s3a.connection.ssl.enabled=false
+```
+
+Загрузка данных с помощью PXF производилась ...
+
+Ключи дистрибьюции были выбраны ...
+
+```sql
+DROP EXTERNAL TABLE IF EXISTS ext_patients;
+
+CREATE EXTERNAL TABLE ext_patients (
+    id TEXT,
+    birthdate DATE,
+    deathdate DATE,
+    prefix TEXT,
+    first TEXT,
+    last TEXT,
+    suffix TEXT,
+    maiden TEXT,
+    marital TEXT,
+    race TEXT,
+    ethnicity TEXT,
+    gender TEXT,
+    birthplace TEXT,
+    address TEXT,
+    city TEXT,
+    state TEXT,
+    county TEXT,
+    zip TEXT,
+    lat DOUBLE PRECISION,
+    lon DOUBLE PRECISION
+)
+LOCATION ('pxf://hospitalpatientrecords/patients.csv?PROFILE=s3:csv&SERVER=pirod_minio&FILE_HEADER=USE&S3_SELECT=AUTO')
+FORMAT 'CSV' (HEADER);
+
+SELECT COUNT(*) FROM ext_patients;
+```
+
+Подключение к сегменту `PGOPTIONS='-c gp_session_role=utility' psql -p 6000 -d lab3`.
