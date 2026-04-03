@@ -4,7 +4,7 @@ CONTAINER := pirodgreenplum
 PXF_SERVERS_DIR := /data/pxf/servers
 TARGET_SERVER_DIR := $(PXF_SERVERS_DIR)/minio
 
-.PHONY: up down wait-pxf copy-minio check-export
+.PHONY: up down wait-pxf copy-minio check-export load-pxf
 
 up:
 	@if ! docker compose version >/dev/null 2>&1; then \
@@ -39,6 +39,15 @@ check-export:
 		exit 1; \
 	}
 	@echo "Data check passed."
+
+load-pxf:
+	@echo "Loading data from PXF external tables into Greenplum..."
+	@if ! docker ps --format '{{.Names}}' | grep -qx '$(CONTAINER)'; then \
+		echo "Container $(CONTAINER) is not running."; \
+		exit 1; \
+	fi
+	@docker exec $(CONTAINER) su - gpadmin -c "psql -v ON_ERROR_STOP=1 -d lab3 -f /opt/lab3/sql/load_from_pxf.sql"
+	@echo "Data load completed."
 
 down:
 	@if ! docker compose version >/dev/null 2>&1; then \

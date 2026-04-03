@@ -11,6 +11,7 @@ services:
       - GREENPLUM_DATABASE_NAME=${GREENPLUM_DATABASE_NAME}
     volumes:
       - ./custom_init_scripts:/docker-entrypoint-initdb.d
+      - ./sql:/opt/lab3/sql
     networks:
       - pirod_gp
 
