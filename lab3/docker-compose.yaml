@@ -1,8 +1,8 @@
 services:
-  pirod_greenplum:
+  pirodgreenplum:
     image: ${IMAGE_NAME}:${TAG}
-    container_name: pirod_greenplum
-    hostname: pirod_greenplum
+    container_name: pirodgreenplum
+    hostname: pirodgreenplum
     ports:
       - "${EXPOSE_MASTER_PORT}:5432"
     environment:
@@ -11,14 +11,13 @@ services:
       - GREENPLUM_DATABASE_NAME=${GREENPLUM_DATABASE_NAME}
     volumes:
       - ./custom_init_scripts:/docker-entrypoint-initdb.d
-      # - greenplum_data:/data
     networks:
       - pirod_gp
 
-  pirod_minio:
+  pirodminio:
     image: minio/minio:latest
-    container_name: pirod_minio
-    hostname: pirod_minio
+    container_name: pirodminio
+    hostname: pirodminio
     command: server /data --console-address ":9001"
     environment:
       - MINIO_ROOT_USER=${MINIO_ROOT_USER}
@@ -27,7 +26,7 @@ services:
       - "9000:9000"
       - "9001:9001"
     # volumes:
-    #   - minio_data:/data
+    #   - ./minio_data:/data
     networks:
       - pirod_gp
 
