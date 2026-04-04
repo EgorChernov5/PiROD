@@ -1,0 +1,11 @@
+table_name,segment_id,row_count
+encounters_gp,0,13898
+encounters_gp,1,13993
+organizations_gp,0,1
+organizations_gp,1,1
+patients_gp,0,974
+patients_gp,1,974
+payers_gp,0,10
+payers_gp,1,10
+procedures_gp,0,23875
+procedures_gp,1,23826

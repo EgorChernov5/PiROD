@@ -1,0 +1,55 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="520" viewBox="0 0 1100 520">
+<style>
+text { font-family: Arial, sans-serif; fill: #202124; }
+.title { font-size: 22px; font-weight: bold; }
+.axis { font-size: 12px; }
+.label { font-size: 13px; font-weight: bold; }
+.value { font-size: 12px; }
+.note { font-size: 11px; fill: #5f6368; }
+</style>
+<rect width="100%" height="100%" fill="#ffffff"/>
+<text x="180" y="40" class="title">Физическое число строк на сегментах</text>
+<text x="180" y="60" class="note">REPLICATED-таблицы целиком присутствуют на каждом сегменте, поэтому их значения совпадают.</text>
+<line x1="180" y1="450.0" x2="1020" y2="450.0" stroke="#e0e0e0"/>
+<text x="168" y="454.0" text-anchor="end" class="axis">0</text>
+<line x1="180" y1="376.0" x2="1020" y2="376.0" stroke="#e0e0e0"/>
+<text x="168" y="380.0" text-anchor="end" class="axis">5,252</text>
+<line x1="180" y1="302.0" x2="1020" y2="302.0" stroke="#e0e0e0"/>
+<text x="168" y="306.0" text-anchor="end" class="axis">10,505</text>
+<line x1="180" y1="228.0" x2="1020" y2="228.0" stroke="#e0e0e0"/>
+<text x="168" y="232.0" text-anchor="end" class="axis">15,757</text>
+<line x1="180" y1="154.0" x2="1020" y2="154.0" stroke="#e0e0e0"/>
+<text x="168" y="158.0" text-anchor="end" class="axis">21,010</text>
+<line x1="180" y1="80.0" x2="1020" y2="80.0" stroke="#e0e0e0"/>
+<text x="168" y="84.0" text-anchor="end" class="axis">26,262</text>
+<line x1="180" y1="450" x2="1020" y2="450" stroke="#202124"/>
+<rect x="880" y="24" width="14" height="14" fill="#1f77b4"/>
+<text x="902" y="36" class="axis">segment 0</text>
+<rect x="880" y="46" width="14" height="14" fill="#ff7f0e"/>
+<text x="902" y="58" class="axis">segment 1</text>
+<text x="264.0" y="498" text-anchor="middle" class="label">encounters_gp</text>
+<rect x="209.0" y="254.2" width="46" height="195.8" fill="#1f77b4"/>
+<text x="232.0" y="246.2" text-anchor="middle" class="value">13,898</text>
+<rect x="273.0" y="252.9" width="46" height="197.1" fill="#ff7f0e"/>
+<text x="296.0" y="244.9" text-anchor="middle" class="value">13,993</text>
+<text x="432.0" y="498" text-anchor="middle" class="label">organizations_gp</text>
+<rect x="377.0" y="450.0" width="46" height="0.0" fill="#1f77b4"/>
+<text x="400.0" y="442.0" text-anchor="middle" class="value">1</text>
+<rect x="441.0" y="450.0" width="46" height="0.0" fill="#ff7f0e"/>
+<text x="464.0" y="442.0" text-anchor="middle" class="value">1</text>
+<text x="600.0" y="498" text-anchor="middle" class="label">patients_gp</text>
+<rect x="545.0" y="436.3" width="46" height="13.7" fill="#1f77b4"/>
+<text x="568.0" y="428.3" text-anchor="middle" class="value">974</text>
+<rect x="609.0" y="436.3" width="46" height="13.7" fill="#ff7f0e"/>
+<text x="632.0" y="428.3" text-anchor="middle" class="value">974</text>
+<text x="768.0" y="498" text-anchor="middle" class="label">payers_gp</text>
+<rect x="713.0" y="449.9" width="46" height="0.1" fill="#1f77b4"/>
+<text x="736.0" y="441.9" text-anchor="middle" class="value">10</text>
+<rect x="777.0" y="449.9" width="46" height="0.1" fill="#ff7f0e"/>
+<text x="800.0" y="441.9" text-anchor="middle" class="value">10</text>
+<text x="936.0" y="498" text-anchor="middle" class="label">procedures_gp</text>
+<rect x="881.0" y="113.6" width="46" height="336.4" fill="#1f77b4"/>
+<text x="904.0" y="105.6" text-anchor="middle" class="value">23,875</text>
+<rect x="945.0" y="114.3" width="46" height="335.7" fill="#ff7f0e"/>
+<text x="968.0" y="106.3" text-anchor="middle" class="value">23,826</text>
+</svg>
