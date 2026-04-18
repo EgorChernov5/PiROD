@@ -13,15 +13,7 @@ def squential_catch_outliers(values: list[float], k: float) -> list[float]:
         sum((x - mean_values) ** 2 for x in values) / len(values))
     threshold = k*std_values
 
-    with ProcessPoolExecutor(max_workers=1) as executor:
-        results = executor.map(find_outliers, [values],
-                               repeat(mean_values), repeat(threshold))
-
-    outliers = []
-    for part in results:
-        outliers.extend(part)
-
-    return outliers
+    return find_outliers(values, mean_values, threshold)
 
 
 def parallel_catch_outliers(values: list[float], k: float, workers: int = 4) -> list[float]:
