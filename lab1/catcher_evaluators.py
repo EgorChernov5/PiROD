@@ -5,7 +5,7 @@ from pathlib import Path
 import os
 import json
 
-from outliers_catchers import squential_catch_outliers, parallel_catch_outliers
+from outliers_catchers import sequential_catch_outliers, parallel_catch_outliers
 from visualizator import plot_line_graph
 
 
@@ -16,7 +16,7 @@ def generate_random_floats(values_size: int, random_seed: int = 42) -> list[floa
 
 def compare_outliers_catchers(values: list[float], k: float, workers: int = 4, save_path: Path | None = None):
     start_time = perf_counter()
-    squential_catch_outliers(values, k)
+    sequential_catch_outliers(values, k)
     sequential_time = perf_counter() - start_time
 
     start_time = perf_counter()
@@ -78,7 +78,7 @@ def analize_determinism(n, values, k, workers):
         title="Работа параллельной версии на одинаковых параметрах",
         save_path=Path(__file__).resolve().parent / "artifacts/parallel_catch_outliers.png",
         x_range=(0, max(x)),
-        y_range=(min(y) - 100, max(y) + 100)
+        y_range=(max([0, min(y) - 100]), max(y) + 100)
     )
 
 
@@ -99,23 +99,23 @@ if __name__ == "__main__":
     # workers = 4
     # compare_outliers_catchers(values, k, workers)
     # 4 пункт
-    # n = 200
-    # values = generate_random_floats(100000, random_seed)
-    # k = 0.2
-    # workers = 4
-    # analize_determinism(n, values, k, workers)
+    n = 200
+    values = generate_random_floats(100000, random_seed)
+    k = 0.2
+    workers = 4
+    analize_determinism(n, values, k, workers)
     # 5 пункт
-    list_values = [
-        generate_random_floats(100000, random_seed),
-        generate_random_floats(400000, random_seed),
-        generate_random_floats(700000, random_seed),
-        generate_random_floats(1000000, random_seed),
-        generate_random_floats(1300000, random_seed)
-    ]
-    list_k = [
-        0.2,
-        0.7
-    ]
-    print(f"MAX(CPU) = {os.cpu_count()}")
-    list_workers = [1, 2, 3, 4, 5, 6, 7, 8, 16, 32]
-    evaluate_outliers_catchers(list_values, list_k, list_workers)
+    # list_values = [
+    #     generate_random_floats(100000, random_seed),
+    #     generate_random_floats(400000, random_seed),
+    #     generate_random_floats(700000, random_seed),
+    #     generate_random_floats(1000000, random_seed),
+    #     generate_random_floats(1300000, random_seed)
+    # ]
+    # list_k = [
+    #     0.2,
+    #     0.7
+    # ]
+    # print(f"MAX(CPU) = {os.cpu_count()}")
+    # list_workers = [1, 2, 3, 4, 5, 6, 7, 8, 16, 32]
+    # evaluate_outliers_catchers(list_values, list_k, list_workers)
