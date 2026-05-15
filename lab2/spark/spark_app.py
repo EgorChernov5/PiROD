@@ -90,7 +90,7 @@ def get_wine_schema() -> T.StructType:
     )
 
 
-def get_jdbc_properties() -> dict[str, str]:
+def get_jdbc_properties() -> dict:
     """
     Возвращает параметры подключения JDBC к Postgres.
 
