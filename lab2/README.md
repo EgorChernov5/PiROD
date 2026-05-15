@@ -348,7 +348,7 @@ LIMIT 10;
 Посмотреть список topic:
 
 ```powershell
-docker compose exec kafka kafka-topics.sh --bootstrap-server kafka:9092 --list
+docker compose exec kafka /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --list
 ```
 
 В списке должен быть topic:
@@ -360,7 +360,7 @@ red-wine-quality
 Посмотреть сообщения из topic:
 
 ```powershell
-docker compose exec kafka kafka-console-consumer.sh --bootstrap-server kafka:9092 --topic red-wine-quality --from-beginning --max-messages 5
+docker compose exec kafka /opt/kafka/bin/kafka-console-consumer.sh --bootstrap-server kafka:9092 --topic red-wine-quality --from-beginning --max-messages 5
 ```
 
 Сообщения должны быть в JSON-формате с полями датасета:
