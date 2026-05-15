@@ -56,7 +56,9 @@ lab4/
   postgres/init/01_schema.sql
   postgres/init/02_data.sql
   mongo/init/01_submission_feedback.js
-  minio/data/submission-files/submission_files_manifest.csv
+  model4_university/minio/submission_files_manifest.csv
+  model4_university/mongodb/submission_feedback.csv
+  model4_university/postgres/*.csv
   minio/init/load-manifest.sh
   trino/catalog/postgres.properties
   trino/catalog/mongodb.properties
@@ -73,7 +75,7 @@ lab4/
 
 Postgres:
 
-- `students(student_id, full_name, group_name, email)` - студенты и учебные группы.
+- `students(student_id, full_name, group_name, enrollment_year, email)` - студенты, учебные группы и год поступления.
 - `teachers(teacher_id, full_name, department)` - преподаватели.
 - `courses(course_id, teacher_id, course_name, semester)` - учебные курсы.
 - `enrollments(enrollment_id, course_id, student_id, enrolled_dt)` - записи студентов на курсы.
@@ -83,20 +85,20 @@ Postgres:
 MongoDB:
 
 - `university.submission_feedback` - документы с `submission_id`, комментарием преподавателя и массивом `rubric`.
-- Элемент `rubric` содержит `criterion`, `max_points` и `points`.
+- Элемент `rubric` содержит `criterion`, `points`, `max_points` и `comment`; `max_points` добавляется при загрузке как `5`.
 
 MinIO:
 
-- `submission_files_manifest.csv` - manifest с колонками `submission_id`, `assignment_id`, `file_name`, `size_bytes`, `object_path`.
-- В manifest намеренно отсутствуют файлы для части `submission_id`, чтобы запросы находили сдачи без файла.
+- `submission_files_manifest.csv` - manifest с колонками `assignment_id`, `student_id`, `submission_id`, `file_path`, `size_kb`.
+- Manifest загружается из архивного набора `model4_university`.
 
 ## Демонстрационные данные
 
-В Postgres загружаются 8 студентов, 3 преподавателя, 4 курса, записи студентов на курсы, 8 заданий и 29 сдач. Данные включают сдачи вовремя, просрочки, нулевые оценки и сложное задание с низкой средней оценкой.
+В Postgres загружаются 140 студентов, 16 преподавателей, 28 курсов, 620 записей студентов на курсы, 70 заданий и 1562 сдачи.
 
-В MongoDB загружаются документы feedback для выбранных сдач. Массив `rubric` содержит разные критерии: `correctness`, `style`, `tests`, `documentation`, `performance`. В данных есть как высокие баллы, так и частые просадки по отдельным критериям.
+В MongoDB загружаются 900 документов feedback. Массив `rubric` содержит разные критерии: `correctness`, `report`, `style`, `tests`, `performance`.
 
-В MinIO подготовлен CSV manifest с файлами работ. В нем есть разные размеры файлов, несколько крупных архивов и отсутствующие записи для некоторых сдач из Postgres.
+В MinIO подготовлен CSV manifest на 1562 строки с путями файлов работ и размерами в килобайтах.
 
 ## SQL-задачи
 
@@ -150,7 +152,7 @@ Postgres и MongoDB загружают данные автоматически �
 
 ```powershell
 # Загрузить CSV manifest в MinIO через контейнер minio/mc.
-docker run --rm --network lab4_trino-net --entrypoint /bin/sh -v "${PWD}/minio/data:/data:ro" -v "${PWD}/minio/init:/init:ro" minio/mc /init/load-manifest.sh
+docker run --rm --network lab4_trino-net --entrypoint /bin/sh -v "${PWD}/model4_university/minio:/data:ro" -v "${PWD}/minio/init:/init:ro" minio/mc /init/load-manifest.sh
 ```
 
 Проверить загрузку можно через веб-консоль MinIO:
@@ -173,17 +175,20 @@ docker exec -it lab4-trino trino
 Вставить в консоль Trino SQL:
 
 ```sql
+-- Удалить старую регистрацию manifest, если она была создана для прежнего датасета.
+DROP TABLE IF EXISTS minio.analytics.submission_files_manifest;
+
 -- Создать схему для внешней таблицы в Hive-каталоге.
 CREATE SCHEMA IF NOT EXISTS minio.analytics
 WITH (location = 's3://course-data/');
 
 -- Зарегистрировать CSV manifest как таблицу Trino.
 CREATE TABLE IF NOT EXISTS minio.analytics.submission_files_manifest (
-    submission_id varchar,
     assignment_id varchar,
-    file_name varchar,
-    size_bytes varchar,
-    object_path varchar
+    student_id varchar,
+    submission_id varchar,
+    file_path varchar,
+    size_kb varchar
 )
 WITH (
     external_location = 's3://course-data/submission-files/',
@@ -235,102 +240,127 @@ FROM minio.analytics.submission_files_manifest;
 
 Ожидаемые значения:
 
-- `students_count` = `8`;
-- `submissions_count` = `29`;
-- `feedback_count` = `12`;
-- `manifest_rows` = `26`.
+- `students_count` = `140`;
+- `submissions_count` = `1562`;
+- `feedback_count` = `900`;
+- `manifest_rows` = `1562`.
 
 ### 6. Запустить SQL-скрипты
-
-1. `01_course_load.sql` должен вывести топ курсов по числу студентов. Курсы `Distributed SQL`, `Databases` и `Data Pipelines` должны быть среди верхних строк.
 
 ```powershell
 # Выполнить запрос по нагрузке курсов.
 Get-Content -Raw .\sql\01_course_load.sql | docker exec -i lab4-trino trino
-"104","Distributed SQL","6","2"
-"101","Databases","5","3"
-"102","Data Pipelines","5","2"
-"103","Software Testing","3","1"
-```
+"7","Course_7","28","3"
+"18","Course_18","27","2"
+"8","Course_8","27","1"
+"5","Course_5","26","5"
+"14","Course_14","26","4"
 
-2. `02_submission_punctuality.sql` должен показать доли просрочек по `course_id` и `group_name`.
-```powershell
 # Выполнить запрос по пунктуальности сдач.
 Get-Content -Raw .\sql\02_submission_punctuality.sql | docker exec -i lab4-trino trino
-"101","CS-101","8","1.38","0.5"
-"101","CS-102","5","1.4","0.6"
-"102","CS-102","2","1.0","0.5"
-"102","DS-201","5","1.0","0.4"
-"103","CS-101","2","1.0","0.5"
-"103","DS-201","1","0.0","0.0"
-"104","CS-101","2","0.5","0.5"
-"104","CS-102","2","1.0","0.5"
-"104","DS-201","2","2.0","0.5"
-```
+"1","CS-1-A","4","0.75","0.25"
+"1","CS-1-B","2","2.0","0.5"
+"1","CS-1-C","2","0.0","0.0"
+"1","CS-2-A","8","0.5","0.25"
+"1","CS-2-B","2","0.0","0.0"
+"1","CS-2-C","6","0.5","0.167"
+"1","CS-3-A","2","1.0","0.5"
+"1","CS-3-C","2","0.0","0.0"
+"1","CS-4-A","4","2.25","0.75"
+"1","CS-4-C","6","0.5","0.333"
+"3","CS-1-A","2","0.0","0.0"
+"3","CS-1-B","4","1.0","0.5"
+"3","CS-1-C","2","1.5","0.5"
+"3","CS-2-A","4","1.0","0.25"
+"3","CS-2-B","2","0.0","0.0"
+"3","CS-2-C","6","1.67","0.5"
+"3","CS-3-A","10","1.4","0.6"
+"3","CS-4-B","2","0.0","0.0"
+"3","CS-4-C","10","1.2","0.4"
+# ...
 
-3. `03_grade_distribution.sql` должен показать средние оценки, медианы, долю нулей и флаг `is_too_hard`.
-```powershell
 # Выполнить запрос по распределению оценок.
 Get-Content -Raw .\sql\03_grade_distribution.sql | docker exec -i lab4-trino trino
-"101","1003","Transactions lab","4","3.5","4.0","0.25","0.75","true"
-"101","1001","SQL joins","5","6.0","7.0","0.2","0.4","false"
-"101","1002","Indexes and plans","4","7.25","8.5","0.0","0.5","false"
-"104","4002","Federated query mart","3","7.33","7.0","0.0","0.667","false"
-"103","3001","Unit test suite","3","7.67","8.0","0.0","0.333","false"
-"102","2001","Kafka ingestion","4","9.0","12.0","0.25","0.5","false"
-"104","4001","Trino catalogs","3","10.67","11.0","0.0","0.333","false"
-"102","2002","Warehouse modeling","3","12.0","13.0","0.0","0.333","false"
-```
+"17","22","Assignment_22","20","6.35","7.0","0.0","0.45","false"
+"9","42","Assignment_42","19","6.74","7.0","0.0","0.474","false"
+"12","25","Assignment_25","20","6.8","7.0","0.0","0.4","false"
+"5","41","Assignment_41","26","6.81","7.0","0.0","0.154","false"
+"25","50","Assignment_50","25","6.84","7.0","0.0","0.4","false"
+"18","5","Assignment_5","27","6.85","7.0","0.0","0.481","false"
+"9","57","Assignment_57","19","7.11","7.0","0.0","0.474","false"
+"24","32","Assignment_32","24","7.33","7.0","0.0","0.583","false"
+"13","18","Assignment_18","24","7.67","8.0","0.0","0.5","false"
+"19","19","Assignment_19","26","13.27","15.0","0.0","0.385","false"
+"18","6","Assignment_6","27","13.41","13.0","0.0","0.259","false"
+"14","16","Assignment_16","26","14.0","13.0","0.0","0.154","false"
+"19","70","Assignment_70","26","14.08","14.0","0.0","0.5","false"
+"26","58","Assignment_58","18","14.17","14.0","0.0","0.333","false"
+# ...
 
-4. `04_rubric_evaluation.sql` должен вывести критерии rubric, где чаще всего есть просадки.
-```powershell
 # Выполнить запрос по rubric из MongoDB.
 Get-Content -Raw .\sql\04_rubric_evaluation.sql | docker exec -i lab4-trino trino
-"tests","5","0.9","0.35","0.8"
-"correctness","12","3.38","0.496","0.583"
-"documentation","7","2.11","0.632","0.429"
-"style","8","1.27","0.65","0.375"
-"performance","4","1.33","0.558","0.25"
-```
+"report","621","2.4","0.481","0.523"
+"correctness","638","2.44","0.488","0.517"
+"tests","640","2.52","0.504","0.497"
+"performance","610","2.53","0.505","0.484"
+"style","635","2.66","0.531","0.455"
 
-5. `05_submission_files.sql` должен вернуть три результата: средний размер файлов по заданиям, топ-10 больших файлов и список сдач без файла (сдачи, у которых есть запись в Postgres, но нет файла в MinIO manifest).
-```powershell
 # Выполнить запрос по файлам из MinIO.
 Get-Content -Raw .\sql\05_submission_files.sql | docker exec -i lab4-trino trino
-# assignment_id, file_count, avg_file_size_kb
-"1001","4","16.66"
-"1002","4","335.54"
-"1003","4","372.97"
-"2001","4","679.01"
-"2002","2","950.24"
-"3001","3","237.46"
-"4001","3","721.52"
-"4002","2","1977.54"
-# submission_id, assignment_id, file_name, size_bytes, object_path
-"5027","4002","mart_pavel.zip","2300000","s3://course-data/submission-files/4002/5027/mart_pavel.zip"
-"5028","4002","mart_elena.zip","1750000","s3://course-data/submission-files/4002/5028/mart_elena.zip"
-"5020","2002","warehouse_dmitry.zip","1500200","s3://course-data/submission-files/2002/5020/warehouse_dmitry.zip"
-"5014","2001","kafka_maria.tar.gz","1048576","s3://course-data/submission-files/2001/5014/kafka_maria.tar.gz"
-"5016","2001","kafka_elena.tar.gz","934221","s3://course-data/submission-files/2001/5016/kafka_elena.tar.gz"
-"5026","4001","trino_maria.zip","905500","s3://course-data/submission-files/4001/5026/trino_maria.zip"
-"5015","2001","kafka_pavel.tar.gz","786432","s3://course-data/submission-files/2001/5015/kafka_pavel.tar.gz"
-"5010","1003","transactions_anna.zip","734003","s3://course-data/submission-files/1003/5010/transactions_anna.zip"
-"5025","4001","trino_ivan.zip","705500","s3://course-data/submission-files/4001/5025/trino_ivan.zip"
-"5013","1003","transactions_pavel.zip","612440","s3://course-data/submission-files/1003/5013/transactions_pavel.zip"
-# submission_id, assignment_id, student_id, submitted_ts, grade
-"5004","1001","4","2026-03-05 11:30:00.000000","0.00"
-"5018","2002","5","2026-03-24 10:00:00.000000","8.00"
-"5029","4002","6","2026-04-09 09:00:00.000000","5.00"
-```
+"1","19","2641.32"
+"2","26","2602.38"
+"3","16","3431.38"
+"4","20","2157.4"
+"5","27","2199.22"
+"6","27","2355.74"
+"7","23","1915.17"
+"8","17","1888.88"
+"9","17","1812.76"
+"10","23","1884.74"
+"11","28","2603.64"
+"12","24","2233.17"
+# ...
+"47","3","submission_47.zip","4995.0","5114880","s3://course-data/submissions_files/assignment_id=3/student_id=139/submission_47.zip"
+"1301","59","submission_1301.zip","4984.0","5103616","s3://course-data/submissions_files/assignment_id=59/student_id=54/submission_1301.zip"
+"944","43","submission_944.zip","4981.0","5100544","s3://course-data/submissions_files/assignment_id=43/student_id=61/submission_944.zip"
+"459","21","submission_459.zip","4978.0","5097472","s3://course-data/submissions_files/assignment_id=21/student_id=11/submission_459.zip"
+"492","22","submission_492.zip","4970.0","5089280","s3://course-data/submissions_files/assignment_id=22/student_id=104/submission_492.zip"
+"359","17","submission_359.zip","4969.0","5088256","s3://course-data/submissions_files/assignment_id=17/student_id=18/submission_359.zip"
+"1333","61","submission_1333.zip","4969.0","5088256","s3://course-data/submissions_files/assignment_id=61/student_id=68/submission_1333.zip"
+"510","23","submission_510.zip","4968.0","5087232","s3://course-data/submissions_files/assignment_id=23/student_id=111/submission_510.zip"
+"616","28","submission_616.zip","4967.0","5086208","s3://course-data/submissions_files/assignment_id=28/student_id=16/submission_616.zip"
+"497","23","submission_497.zip","4961.0","5080064","s3://course-data/submissions_files/assignment_id=23/student_id=32/submission_497.zip"
 
-6. `06_course_quality_mart.sql` должен собрать одну строку на курс с метриками из Postgres, MongoDB и MinIO.
-```powershell
 # Выполнить запрос витрины качества курса.
 Get-Content -Raw .\sql\06_course_quality_mart.sql | docker exec -i lab4-trino trino
-"101","Databases","5.62","0.538","241.72","2.1"
-"102","Data Pipelines","10.29","0.429","769.42","4.83"
-"103","Software Testing","7.67","0.333","237.46","3.0"
-"104","Distributed SQL","9.0","0.5","1223.93","4.17"
+"1","Course_1","40.03","0.289","2847.79","1.5"
+"2","Course_2","","","",""
+"3","Course_3","24.95","0.405","2670.57","2.5"
+"4","Course_4","","","",""
+"5","Course_5","22.68","0.269","2514.15","2.28"
+"6","Course_6","17.83","0.425","2606.07","2.62"
+"7","Course_7","18.87","0.405","2591.32","3.07"
+"8","Course_8","36.22","0.407","2829.26","2.82"
+"9","Course_9","20.53","0.421","2479.95","2.28"
+"10","Course_10","33.04","0.348","1884.74","2.45"
+"11","Course_11","18.58","0.375","2495.13","2.33"
+"12","Course_12","14.87","0.317","2424.13","2.48"
+"13","Course_13","13.81","0.458","2436.9","2.83"
+"14","Course_14","27.6","0.365","2801.09","2.64"
+"15","Course_15","27.16","0.374","2283.1","2.5"
+"16","Course_16","23.04","0.314","2106.8","2.2"
+"17","Course_17","16.73","0.417","2544.55","2.37"
+"18","Course_18","10.13","0.37","2277.48","1.81"
+"19","Course_19","17.38","0.413","2589.58","2.63"
+"20","Course_20","21.91","0.087","2321.74","3.0"
+"21","Course_21","26.92","0.413","2748.3","2.04"
+"22","Course_22","18.06","0.394","2659.53","2.32"
+"23","Course_23","22.5","0.438","2704.92","2.93"
+"24","Course_24","21.49","0.403","2260.07","2.44"
+"25","Course_25","6.84","0.4","2468.88","3.22"
+"26","Course_26","22.61","0.403","2536.32","2.35"
+"27","Course_27","22.0","0.429","2564.95","2.64"
+"28","Course_28","","","",""
 ```
 
 ### 7. Остановить стенд
