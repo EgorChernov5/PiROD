@@ -52,7 +52,7 @@ lab2/data/winequality-red.csv
 | Сервис | Назначение |
 | --- | --- |
 | `postgres` | Хранит обработанные строки и агрегированные показатели. При старте выполняет `postgres/init.sql`. |
-| `kafka` | Принимает JSON-сообщения producer и хранит topic `red-wine-quality`. Используется Kafka в режиме KRaft без отдельного Zookeeper. |
+| `kafka` | Принимает JSON-сообщения producer и хранит topic `red-wine-quality`. |
 | `producer` | Читает CSV-файл, формирует JSON и отправляет сообщения в Kafka с паузой между отправками. |
 | `spark-app` | Запускает `spark-submit`, читает Kafka topic, выполняет Spark Structured Streaming pipeline и пишет данные в Postgres через JDBC. |
 
