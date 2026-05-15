@@ -384,25 +384,3 @@ docker compose down -v
 ```
 
 Команда с `-v` удалит данные Postgres и checkpoint Spark. После следующего запуска таблицы будут созданы заново из `postgres/init.sql`.
-
-### 7. Типовые проблемы
-
-Если `spark-app` не может подключиться к Kafka, нужно проверить, что контейнер `lab2-kafka` находится в состоянии `healthy`:
-
-```powershell
-docker compose ps
-```
-
-Если таблицы пустые, нужно проверить:
-
-- есть ли сообщения в логах `producer`;
-- есть ли ошибки в логах `spark-app`;
-- есть ли в CSV строки с `quality >= 6`;
-- не был ли Spark checkpoint создан до изменения логики приложения.
-
-Если нужно полностью перезапустить pipeline с чистым состоянием:
-
-```powershell
-docker compose down -v
-docker compose up --build
-```
