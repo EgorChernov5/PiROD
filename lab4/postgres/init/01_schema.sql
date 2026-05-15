@@ -1,8 +1,17 @@
+-- Удаляет старые таблицы при ручном повторном выполнении скрипта.
+DROP TABLE IF EXISTS submissions;
+DROP TABLE IF EXISTS assignments;
+DROP TABLE IF EXISTS enrollments;
+DROP TABLE IF EXISTS courses;
+DROP TABLE IF EXISTS teachers;
+DROP TABLE IF EXISTS students;
+
 -- Создает справочники студентов и преподавателей.
 CREATE TABLE students (
     student_id INTEGER PRIMARY KEY,
     full_name VARCHAR(120) NOT NULL,
     group_name VARCHAR(20) NOT NULL,
+    enrollment_year INTEGER NOT NULL,
     email VARCHAR(120) NOT NULL UNIQUE
 );
 

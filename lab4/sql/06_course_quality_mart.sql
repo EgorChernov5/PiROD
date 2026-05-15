@@ -11,7 +11,7 @@ WITH course_submission_stats AS (
 file_stats AS (
     SELECT
         a.course_id,
-        ROUND(AVG(CAST(f.size_bytes AS bigint)) / 1024.0, 2) AS avg_file_size_kb
+        ROUND(AVG(CAST(f.size_kb AS double)), 2) AS avg_file_size_kb
     FROM minio.analytics.submission_files_manifest AS f
     JOIN postgres.public.assignments AS a ON CAST(f.assignment_id AS integer) = a.assignment_id
     GROUP BY a.course_id
@@ -23,7 +23,7 @@ correctness_stats AS (
     FROM postgres.public.submissions AS s
     JOIN postgres.public.assignments AS a ON s.assignment_id = a.assignment_id
     JOIN mongodb.university.submission_feedback AS f ON s.submission_id = f.submission_id
-    CROSS JOIN UNNEST(f.rubric) AS rubric(criterion, max_points, points)
+    CROSS JOIN UNNEST(f.rubric) AS rubric(criterion, points, max_points, comment)
     WHERE rubric.criterion = 'correctness'
     GROUP BY a.course_id
 )

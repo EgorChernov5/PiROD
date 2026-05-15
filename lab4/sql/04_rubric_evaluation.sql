@@ -10,7 +10,7 @@ WITH rubric_items AS (
     FROM postgres.public.submissions AS s
     JOIN postgres.public.assignments AS a ON s.assignment_id = a.assignment_id
     JOIN mongodb.university.submission_feedback AS f ON s.submission_id = f.submission_id
-    CROSS JOIN UNNEST(f.rubric) AS rubric(criterion, max_points, points)
+    CROSS JOIN UNNEST(f.rubric) AS rubric(criterion, points, max_points, comment)
 ),
 criterion_stats AS (
     SELECT

@@ -3,15 +3,17 @@ WITH file_manifest AS (
     SELECT
         CAST(submission_id AS integer) AS submission_id,
         CAST(assignment_id AS integer) AS assignment_id,
-        file_name,
-        CAST(size_bytes AS bigint) AS size_bytes,
-        object_path
+        CAST(student_id AS integer) AS student_id,
+        regexp_extract(file_path, '[^/]+$', 0) AS file_name,
+        CAST(size_kb AS double) AS size_kb,
+        CAST(size_kb AS bigint) * 1024 AS size_bytes,
+        CONCAT('s3://course-data/', file_path) AS object_path
     FROM minio.analytics.submission_files_manifest
 )
 SELECT
     assignment_id,
     COUNT(*) AS file_count,
-    ROUND(AVG(size_bytes) / 1024.0, 2) AS avg_file_size_kb
+    ROUND(AVG(size_kb), 2) AS avg_file_size_kb
 FROM file_manifest
 GROUP BY assignment_id
 ORDER BY assignment_id;
@@ -21,26 +23,30 @@ WITH file_manifest AS (
     SELECT
         CAST(submission_id AS integer) AS submission_id,
         CAST(assignment_id AS integer) AS assignment_id,
-        file_name,
-        CAST(size_bytes AS bigint) AS size_bytes,
-        object_path
+        CAST(student_id AS integer) AS student_id,
+        regexp_extract(file_path, '[^/]+$', 0) AS file_name,
+        CAST(size_kb AS double) AS size_kb,
+        CAST(size_kb AS bigint) * 1024 AS size_bytes,
+        CONCAT('s3://course-data/', file_path) AS object_path
     FROM minio.analytics.submission_files_manifest
 )
 SELECT
     submission_id,
     assignment_id,
     file_name,
+    size_kb,
     size_bytes,
     object_path
 FROM file_manifest
-ORDER BY size_bytes DESC, submission_id
+ORDER BY size_kb DESC, submission_id
 LIMIT 10;
 
 -- Находит сдачи из Postgres, для которых нет файла в manifest MinIO.
 WITH file_manifest AS (
     SELECT
         CAST(submission_id AS integer) AS submission_id,
-        CAST(assignment_id AS integer) AS assignment_id
+        CAST(assignment_id AS integer) AS assignment_id,
+        CAST(student_id AS integer) AS student_id
     FROM minio.analytics.submission_files_manifest
 )
 SELECT
