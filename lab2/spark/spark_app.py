@@ -37,6 +37,22 @@ EVENT_COLUMNS = [
 ]
 
 
+# Порог сульфатов используется для простой детекции аномалий.
+ANOMALY_SULPHATES_THRESHOLD = 1.0
+
+
+# Колонки аномалий выводятся в лог Spark driver.
+ANOMALY_LOG_COLUMNS = [
+    "fixed_acidity",
+    "volatile_acidity",
+    "sulphates",
+    "alcohol",
+    "quality",
+    "kafka_timestamp",
+    "anomaly_reason",
+]
+
+
 def build_spark_session() -> SparkSession:
     """
     Создает SparkSession для Structured Streaming приложения.
@@ -158,6 +174,35 @@ def read_kafka_stream(spark: SparkSession) -> DataFrame:
     )
 
 
+def add_anomaly_flags(wine_stream: DataFrame) -> DataFrame:
+    """
+    Добавляет флаги простой детекции аномалий по порогу sulphates.
+
+    Parameters:
+        wine_stream (DataFrame): Поток строк Red Wine Quality.
+
+    Returns:
+        DataFrame: Поток с колонками is_anomaly и anomaly_reason.
+
+    Fallbacks:
+        Если sulphates не задан, строка не считается аномальной.
+    """
+    # Считаем аномалией только превышение простого порога sulphates.
+    anomaly_condition = F.coalesce(
+        F.col("sulphates") > F.lit(ANOMALY_SULPHATES_THRESHOLD),
+        F.lit(False),
+    )
+
+    # Добавляем флаг и понятную причину для вывода в лог.
+    return wine_stream.withColumn("is_anomaly", anomaly_condition).withColumn(
+        "anomaly_reason",
+        F.when(
+            F.col("is_anomaly"),
+            F.lit(f"sulphates > {ANOMALY_SULPHATES_THRESHOLD}"),
+        ).otherwise(F.lit(None).cast("string")),
+    )
+
+
 def parse_wine_messages(kafka_stream: DataFrame) -> DataFrame:
     """
     Парсит Kafka value как JSON и применяет бизнес-преобразования.
@@ -197,10 +242,10 @@ def parse_wine_messages(kafka_stream: DataFrame) -> DataFrame:
         F.col("kafka_timestamp"),
     )
 
-    # Оставляем только валидные и качественные вина, затем добавляем UDF-группу.
+    # Оставляем валидные вина, добавляем UDF-группу и флаги аномалий.
     return (
         wine_stream.filter(F.col("quality").isNotNull())
-        .filter(F.col("quality") >= 6)
+        .transform(add_anomaly_flags)
         .withColumn("quality_group", quality_group_udf(F.col("quality")))
     )
 
@@ -229,6 +274,35 @@ def write_jdbc_table(dataframe: DataFrame, table_name: str, mode: str = "append"
             properties=get_jdbc_properties(),
         )
     )
+
+
+def log_anomalies(batch_df: DataFrame, batch_id: int) -> None:
+    """
+    Выводит найденные аномалии micro-batch в лог Spark driver.
+
+    Parameters:
+        batch_df (DataFrame): Строки текущего micro-batch.
+        batch_id (int): Идентификатор micro-batch.
+
+    Returns:
+        None: Значение не возвращается.
+
+    Fallbacks:
+        Если аномалий нет, лог не выводится.
+    """
+    # Выбираем только аномальные строки для вывода в docker logs spark-app.
+    anomaly_rows = (
+        batch_df.filter(F.col("is_anomaly"))
+        .select(*ANOMALY_LOG_COLUMNS)
+        .collect()
+    )
+
+    # Каждая аномальная строка логируется отдельно с batch_id.
+    for anomaly_row in anomaly_rows:
+        print(
+            f"[ANOMALY] batch_id={batch_id}; data={anomaly_row.asDict()}",
+            flush=True,
+        )
 
 
 def build_stats(batch_df: DataFrame, batch_id: int) -> DataFrame:
@@ -288,17 +362,26 @@ def write_batch_to_postgres(batch_df: DataFrame, batch_id: int) -> None:
     if batch_df.rdd.isEmpty():
         return
 
-    # Кэшируем batch, потому что он используется для двух JDBC-записей.
+    # Кэшируем batch, потому что он используется для логирования и JDBC-записей.
     cached_batch = batch_df.cache()
 
+    # Выводим аномалии в лог и убираем их из основного потока обработки.
+    log_anomalies(cached_batch, batch_id)
+    processed_batch = cached_batch.filter(~F.col("is_anomaly")).filter(
+        F.col("quality") >= 6
+    )
+    if processed_batch.rdd.isEmpty():
+        cached_batch.unpersist()
+        return
+
     # Пишем детальные обработанные строки в wine_events.
-    events_df = cached_batch.withColumn("processed_at", F.current_timestamp()).select(
+    events_df = processed_batch.withColumn("processed_at", F.current_timestamp()).select(
         *EVENT_COLUMNS
     )
     write_jdbc_table(events_df, "wine_events")
 
     # Пишем агрегаты по quality_group в wine_quality_stats.
-    stats_df = build_stats(cached_batch, batch_id)
+    stats_df = build_stats(processed_batch, batch_id)
     write_jdbc_table(stats_df, "wine_quality_stats")
 
     # Освобождаем память executors после завершения записи batch.
@@ -341,7 +424,7 @@ def main() -> None:
     Fallbacks:
         Все подключения настраиваются через переменные окружения docker-compose.
     """
-    # Собираем DAG: Kafka source -> JSON parse -> filter -> UDF -> foreachBatch JDBC.
+    # Собираем DAG: Kafka source -> JSON parse -> anomaly detect -> UDF -> JDBC.
     spark = build_spark_session()
     spark.sparkContext.setLogLevel("WARN")
     kafka_stream = read_kafka_stream(spark)

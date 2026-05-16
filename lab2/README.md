@@ -71,7 +71,7 @@ org.postgresql:postgresql:42.7.3
 
 ### Таблица `wine_events`
 
-Таблица хранит детальные обработанные строки, которые прошли фильтр `quality >= 6`.
+Таблица хранит детальные обработанные строки, которые прошли фильтры `quality >= 6` и `sulphates <= 1.0`.
 
 Основные поля:
 
@@ -130,11 +130,13 @@ Pipeline выполняется в режиме Spark Structured Streaming:
 3. JSON парсится функцией `from_json` по явной схеме `StructType`.
 4. Поле `pH` переименовывается в `ph`.
 5. Некорректные сообщения с пустым `quality` отбрасываются.
-6. Применяется фильтр:
+6. Добавляется простая детекция аномалий:
 
 ```text
-quality >= 6
+sulphates > 1.0
 ```
+
+Такие строки выводятся в лог Spark-приложения с префиксом `[ANOMALY]` и убираются из основного потока обработки внутри `foreachBatch`.
 
 7. Добавляется UDF `classify_quality`, которая формирует поле `quality_group`:
 
@@ -145,10 +147,13 @@ quality >= 6
 | `quality >= 7` | `high` |
 | `quality is null` | `unknown` |
 
-После фильтра `quality >= 6` в Postgres попадают группы `medium` и `high`. Группа `low` оставлена в UDF для полноты логики классификации.
+После фильтров `sulphates <= 1.0` и `quality >= 6` в Postgres попадают группы `medium` и `high`. Группа `low` оставлена в UDF для полноты логики классификации.
 
 8. Запись выполняется через `foreachBatch`.
 9. В каждом micro-batch:
+   - аномалии выводятся в лог;
+   - аномалии убираются из основного потока;
+   - для неаномальных строк применяется фильтр `quality >= 6`;
    - обработанные строки записываются в `wine_events`;
    - агрегаты по `quality_group` записываются в `wine_quality_stats`.
 
@@ -162,9 +167,12 @@ Kafka source
     -> from_json(value, explicit_schema)
     -> select normalized columns
     -> filter quality is not null
-    -> filter quality >= 6
+    -> detect anomalies by sulphates > 1.0
     -> UDF classify_quality(quality)
     -> foreachBatch
+        -> log anomalies
+        -> filter is_anomaly = false
+        -> filter quality >= 6
         -> write wine_events via JDBC
         -> groupBy quality_group
         -> aggregate count, avg alcohol, avg volatile acidity, min pH, max pH
@@ -178,13 +186,30 @@ Kafka source
 3. **Парсинг JSON** - `from_json` применяет явную схему с типами `DoubleType` и `IntegerType`.
 4. **Нормализация колонок** - Spark выбирает только нужные поля и переименовывает `pH` в `ph`.
 5. **Фильтрация валидности** - строки без `quality` отбрасываются.
-6. **Бизнес-фильтр** - остаются только вина с оценкой `quality >= 6`.
+6. **Детекция аномалий** - строки с `sulphates > 1.0` помечаются как аномальные.
 7. **UDF** - функция `classify_quality` добавляет категорию качества.
 8. **foreachBatch** - каждый micro-batch обрабатывается как обычный DataFrame.
-9. **Запись событий** - детальные строки сохраняются в `wine_events`.
-10. **Агрегация** - данные группируются по `quality_group`.
-11. **Запись агрегатов** - рассчитанные показатели сохраняются в `wine_quality_stats`.
-12. **Checkpoint** - Spark сохраняет состояние query в директории `SPARK_CHECKPOINT_DIR`.
+9. **Логирование аномалий** - аномальные строки выводятся в лог Spark-приложения.
+10. **Фильтр основного потока** - аномалии убираются, затем остаются только вина с `quality >= 6`.
+11. **Запись событий** - детальные строки сохраняются в `wine_events`.
+12. **Агрегация** - данные группируются по `quality_group`.
+13. **Запись агрегатов** - рассчитанные показатели сохраняются в `wine_quality_stats`.
+14. **Checkpoint** - Spark сохраняет состояние query в директории `SPARK_CHECKPOINT_DIR`.
+
+## Data workflow
+
+1. Producer читает строки из `data/winequality-red.csv`.
+2. Каждая строка приводится к JSON-формату и отправляется в Kafka topic `red-wine-quality`.
+3. Spark Structured Streaming читает сообщения из Kafka.
+4. Spark парсит JSON по явной схеме и нормализует имена колонок.
+5. Строки без `quality` отбрасываются как некорректные.
+6. Для каждой валидной строки рассчитываются поля `is_anomaly` и `anomaly_reason`.
+7. В `foreachBatch` строки с `sulphates > 1.0` выводятся в лог с префиксом `[ANOMALY]`.
+8. Аномальные строки исключаются из основного потока обработки.
+9. Для оставшихся строк применяется бизнес-фильтр `quality >= 6`.
+10. Неаномальные строки записываются в таблицу `wine_events`.
+11. По этим же строкам считаются агрегаты по `quality_group`.
+12. Агрегаты записываются в таблицу `wine_quality_stats`.
 
 ## Структура файлов
 
@@ -212,7 +237,7 @@ lab2/
 CSV -> Python Producer -> Kafka -> Spark Structured Streaming -> Postgres
 ```
 
-Producer циклично отправляет строки датасета в Kafka. Spark читает поток, парсит JSON по явной схеме, фильтрует вина с `quality >= 6`, добавляет UDF-группу качества, считает агрегаты и записывает результат в две таблицы Postgres.
+Producer циклично отправляет строки датасета в Kafka. Spark читает поток, парсит JSON по явной схеме, выводит в лог аномалии с `sulphates > 1.0`, убирает их из основного потока, фильтрует вина с `quality >= 6`, добавляет UDF-группу качества, считает агрегаты и записывает результат в две таблицы Postgres.
 
 ## Инструкция по настройке, запуску и проверке
 
@@ -322,7 +347,7 @@ ORDER BY event_id DESC
 LIMIT 10;
 ```
 
-В таблице `wine_events` должны быть только строки с `quality >= 6`.
+В таблице `wine_events` должны быть только строки с `quality >= 6` и `sulphates <= 1.0`.
 
 Проверить агрегаты:
 
@@ -384,3 +409,18 @@ docker compose down -v
 ```
 
 Команда с `-v` удалит данные Postgres и checkpoint Spark. После следующего запуска таблицы будут созданы заново из `postgres/init.sql`.
+
+# Практическое задание
+
+В [lab2](lab2) надо добавить детекцию аномалий, которая выводить их в лог и убирает аномалии из основого потока обработки. Детекция аномалий должна быть максимально простая - это может быть, например, отсечение по порогу.
+
+# Решение
+
+В `spark/spark_app.py` добавлена простая детекция аномалий по порогу `sulphates > 1.0`.
+
+Для каждой строки создаются поля `is_anomaly` и `anomaly_reason`. В `foreachBatch` аномальные строки выводятся в лог Spark-приложения с префиксом `[ANOMALY]`, после чего исключаются из основного потока. В Postgres и агрегаты попадают только неаномальные строки, дополнительно прошедшие исходный фильтр `quality >= 6`.
+
+```powershell
+lab2-spark-app  | [ANOMALY] batch_id=0; data={'fixed_acidity': 7.8, 'volatile_acidity': 0.61, 'sulphates': 1.56, 'alcohol': 9.1, 'quality': 5, 'kafka_timestamp': datetime.datetime(2026, 5, 16, 9, 4, 58, 908000), 'anomaly_reason': 'sulphates > 1.0'}
+lab2-spark-app  | [ANOMALY] batch_id=0; data={'fixed_acidity': 8.1, 'volatile_acidity': 0.56, 'sulphates': 1.28, 'alcohol': 9.3, 'quality': 5, 'kafka_timestamp': datetime.datetime(2026, 5, 16, 9, 5, 10, 935000), 'anomaly_reason': 'sulphates > 1.0'}
+```
