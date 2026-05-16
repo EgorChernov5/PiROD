@@ -1,0 +1,88 @@
+# Описывает учебный стенд с тремя хранилищами и Trino.
+services:
+  postgres:
+    image: postgres:16
+    container_name: lab4-postgres
+    environment:
+      POSTGRES_DB: university
+      POSTGRES_USER: trino
+      POSTGRES_PASSWORD: trino
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./postgres/init:/docker-entrypoint-initdb.d:ro
+      - ./model4_university/postgres:/seed-data/postgres:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U trino -d university"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - trino-net
+
+  mongodb:
+    image: mongo:7
+    container_name: lab4-mongodb
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: root
+      MONGO_INITDB_ROOT_PASSWORD: root
+    ports:
+      - "27017:27017"
+    volumes:
+      - ./mongo/init:/docker-entrypoint-initdb.d:ro
+      - ./model4_university/mongodb:/seed-data/mongodb:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mongosh --quiet --username root --password root --authenticationDatabase admin --eval \"db.adminCommand('ping').ok\""]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      trino-net:
+        aliases:
+          - mongodb
+
+  minio:
+    image: minio/minio:RELEASE.2025-04-22T22-12-26Z
+    container_name: lab4-minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minio
+      MINIO_ROOT_PASSWORD: minio123
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9000/minio/health/live || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - trino-net
+
+  trino:
+    image: trinodb/trino:468
+    container_name: lab4-trino
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./trino/catalog:/etc/trino/catalog:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mongodb:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    networks:
+      - trino-net
+
+# Хранит объекты MinIO между ручными запусками docker compose.
+volumes:
+  minio-data:
+
+# Объединяет сервисы в одну сеть для обращений по DNS-именам контейнеров.
+networks:
+  trino-net:
+    driver: bridge
